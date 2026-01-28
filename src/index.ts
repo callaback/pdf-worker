@@ -47,31 +47,51 @@ const generateDocument = (name: string) => {
 
 export default {
   async fetch(request, env) {
+    // Handle CORS preflight
+    if (request.method === 'OPTIONS') {
+      return new Response(null, {
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type',
+        },
+      })
+    }
+
     const { searchParams } = new URL(request.url);
     let name = searchParams.get("name");
+    const url = searchParams.get("url");
 
-    if (!name) {
-      return new Response("Please provide a name using the ?name= parameter");
+    if (!name && !url) {
+      return new Response("Please provide either ?name= or ?url= parameter", {
+        status: 400,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+        },
+      });
     }
 
     const browser = await puppeteer.launch(env.BROWSER);
     const page = await browser.newPage();
 
-    // Step 1: Define HTML and CSS
-    const document = generateDocument(name);
+    if (url) {
+      // Snapshot URL
+      await page.goto(url, { waitUntil: 'networkidle2' });
+    } else {
+      // Generate certificate
+      const document = generateDocument(name);
+      await page.setContent(document);
+    }
 
-    // // Step 2: Send HTML and CSS to our browser
-    await page.setContent(document);
-
-    // // Step 3: Generate and return PDF
     const pdf = await page.pdf({ printBackground: true });
-
-    // Close browser since we no longer need it
     await browser.close();
 
     return new Response(pdf, {
       headers: {
-        "content-type": "application/pdf",
+        'Content-Type': 'application/pdf',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
       },
     });
   },
